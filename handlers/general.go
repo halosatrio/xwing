@@ -1,10 +1,14 @@
 package handlers
 
-import "github.com/gin-gonic/gin"
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
 
 func Welcome(c *gin.Context) {
-	c.JSON(200, gin.H{
-		"status":  200,
+	c.JSON(http.StatusOK, gin.H{
+		"status":  http.StatusOK,
 		"message": "Welcome to Xwing!",
 	})
 }
