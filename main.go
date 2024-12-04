@@ -2,20 +2,23 @@ package main
 
 import (
 	"database/sql"
+	"log"
+	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/halosatrio/xwing/config"
+	"github.com/halosatrio/xwing/db"
 	"github.com/halosatrio/xwing/routes"
+	"github.com/joho/godotenv"
 )
 
 // main function
 func main() {
-	config.LoadEnv()
+	loadEnv()
 
-	db := config.ConnectDB()
-	defer db.Close()
+	dbx := db.ConnectDB()
+	defer dbx.Close()
 
-	r := setupRouter(db)
+	r := setupRouter(dbx)
 	r.Run(":8080")
 }
 
@@ -30,4 +33,19 @@ func setupRouter(db *sql.DB) *gin.Engine {
 	v.GET("/test", routes.Welcome)
 
 	return r
+}
+
+// config function to load Env
+func loadEnv() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
+}
+func getEnv(key string, defaultVal string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultVal
+	}
+	return value
 }
