@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/halosatrio/xwing/models"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -16,11 +17,7 @@ type registerUserReq struct {
 	Password string `json:"password" binding:"required,min=8"`
 }
 
-var getUser struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
-}
+var user = &models.UserSchema{}
 
 // RegisterRoute handles user registration
 func RegisterRoute(db *sql.DB) gin.HandlerFunc {
@@ -56,7 +53,7 @@ func RegisterRoute(db *sql.DB) gin.HandlerFunc {
 		`
 
 		err = db.QueryRow(query, userReq.Username, userReq.Email, string(hashedPassword), time.Now()).
-			Scan(&getUser.ID, &getUser.Username, &getUser.Email)
+			Scan(&user.ID, &user.Username, &user.Email)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  500,
@@ -68,9 +65,8 @@ func RegisterRoute(db *sql.DB) gin.HandlerFunc {
 
 		// Respond with success
 		c.JSON(http.StatusOK, gin.H{
-			"status":  200,
+			"status":  http.StatusOK,
 			"message": "User registered successfully!",
-			"data":    getUser,
 		})
 	}
 }
@@ -94,17 +90,27 @@ func LoginUser(db *sql.DB) gin.HandlerFunc {
 		}
 
 		queryGetUserByEmail := `
-			SELECT id, username, email
+			SELECT id, username, email, password
 			FROM swordfish.users
 			WHERE email=$1
 		`
 
 		err := db.QueryRow(queryGetUserByEmail, loginReq.Email).
-			Scan(&getUser.ID, &getUser.Username, &getUser.Email)
+			Scan(&user.ID, &user.Username, &user.Email, &user.Password)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  500,
-				"message": "Failed to insert user into database!",
+				"message": "Failed to get user by email",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginReq.Password))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  500,
+				"message": "invalid credentials",
 				"error":   err.Error(),
 			})
 			return
@@ -113,8 +119,7 @@ func LoginUser(db *sql.DB) gin.HandlerFunc {
 		// Respond with success
 		c.JSON(http.StatusOK, gin.H{
 			"status":  200,
-			"message": "User registered successfully!",
-			"data":    getUser,
+			"message": "Success Login!",
 		})
 	}
 }
