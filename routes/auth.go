@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,12 +20,11 @@ type registerUserReq struct {
 	Password string `json:"password" binding:"required,min=8"`
 }
 
-var user = &models.UserSchema{}
-
 // RegisterRoute handles user registration
 func RegisterRoute(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var userReq registerUserReq
+		var user models.UserSchema
 
 		// Validate request body
 		if err := c.ShouldBindJSON(&userReq); err != nil {
@@ -81,65 +81,93 @@ type loginUserReq struct {
 func LoginUser(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var loginReq loginUserReq
+		var user models.UserSchema
 
+		// Validate request body
 		if err := c.ShouldBindJSON(&loginReq); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  400,
+				"status":  http.StatusBadRequest,
 				"message": "Failed to login!",
 				"errors":  err.Error(),
 			})
 			return
 		}
 
+		// Query user by email
 		queryGetUserByEmail := `
 			SELECT id, username, email, password
 			FROM swordfish.users
 			WHERE email=$1
 		`
-
 		err := db.QueryRow(queryGetUserByEmail, loginReq.Email).
 			Scan(&user.ID, &user.Username, &user.Email, &user.Password)
-		if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"status":  http.StatusUnauthorized,
+				"message": "Invalid email or password",
+			})
+			return
+		} else if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  500,
-				"message": "Failed to get user by email",
+				"status":  http.StatusInternalServerError,
+				"message": "Database error",
 				"error":   err.Error(),
 			})
 			return
 		}
 
+		// Compare password
 		err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginReq.Password))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  500,
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"status":  http.StatusUnauthorized,
 				"message": "invalid credentials",
 				"error":   err.Error(),
 			})
 			return
 		}
 
+		// Generate JWT
 		secret := os.Getenv("JWT_SECRET")
+		if secret == "" {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  http.StatusInternalServerError,
+				"message": "Server misconfiguration",
+				"error":   "JWT secret is not set",
+			})
+			return
+		}
+
+		// Set token expiration
+		tokenDuration := time.Hour * 24 // Default
+		if envDuration := os.Getenv("JWT_EXPIRATION_HOURS"); envDuration != "" {
+			if hours, err := strconv.Atoi(envDuration); err == nil {
+				tokenDuration = time.Duration(hours) * time.Hour
+			}
+		}
+
+		// Create token
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"sub":   user.ID,
 			"email": user.Email,
-			"exp":   time.Now().Add(time.Hour * 24).Unix(),
+			"exp":   time.Now().Add(tokenDuration).Unix(),
 		})
 
-		jwt, err := token.SignedString([]byte(secret))
+		tokenString, err := token.SignedString([]byte(secret))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  http.StatusInternalServerError,
-				"message": "Failed",
-				"error":   "[jwt][user] Failed to generate token.",
+				"message": "Failed to generate token",
+				"error":   "[auth][jwt]" + err.Error(),
 			})
 			return
 		}
 
 		// Respond with success
 		c.JSON(http.StatusOK, gin.H{
-			"status":  200,
+			"status":  http.StatusOK,
 			"message": "Success Login!",
-			"data":    jwt,
+			"data":    tokenString,
 		})
 	}
 }
