@@ -36,8 +36,10 @@ func setupRouter(db *sql.DB) *gin.Engine {
 	v1 := r.Group("/v1")
 	{
 		// RegisterRoute
-		v1.POST("/auth", routes.RegisterRoute(db))
+		v1.POST("/auth/register", routes.RegisterRoute(db))
+		v1.GET("/auth/login", routes.LoginUser(db))
 
+		// health check
 		v1.GET("/test", func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{
 				"status":  http.StatusOK,
