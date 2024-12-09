@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/halosatrio/xwing/db"
@@ -32,10 +33,18 @@ func setupRouter(db *sql.DB) *gin.Engine {
 	r := gin.Default()
 
 	// AS BASEPATH
-	v := r.Group("/v1")
+	v1 := r.Group("/v1")
+	{
+		// RegisterRoute
+		v1.POST("/auth", routes.RegisterRoute(db))
 
-	// the routers
-	v.GET("/test", routes.Welcome)
+		v1.GET("/test", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{
+				"status":  http.StatusOK,
+				"message": "Welcome to Xwing!",
+			})
+		})
+	}
 
 	return r
 }
