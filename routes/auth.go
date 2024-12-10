@@ -24,7 +24,7 @@ type registerUserReq struct {
 func RegisterRoute(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var userReq registerUserReq
-		var user models.UserSchema
+		var existingUser models.UserSchema
 
 		// Validate request body
 		if err := c.ShouldBindJSON(&userReq); err != nil {
@@ -32,6 +32,32 @@ func RegisterRoute(db *sql.DB) gin.HandlerFunc {
 				"status":  400,
 				"message": "Failed to register user!",
 				"errors":  err.Error(),
+			})
+			return
+		}
+
+		// Check if email already exists
+		queryCheckEmail := `
+			SELECT id, username, email
+			FROM swordfish.users
+			WHERE email = $1
+		`
+		err := db.QueryRow(queryCheckEmail, userReq.Email).
+			Scan(&existingUser.ID, &existingUser.Username, &existingUser.Email)
+		if err != nil && err != sql.ErrNoRows {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  http.StatusInternalServerError,
+				"message": "Failed to check existing email",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		if err == nil {
+			// Email already exists
+			c.JSON(http.StatusConflict, gin.H{
+				"status":  http.StatusConflict,
+				"message": "Email is already registered",
 			})
 			return
 		}
@@ -54,8 +80,9 @@ func RegisterRoute(db *sql.DB) gin.HandlerFunc {
 			RETURNING id, username, email
 		`
 
+		var newUser models.UserSchema
 		err = db.QueryRow(query, userReq.Username, userReq.Email, string(hashedPassword), time.Now()).
-			Scan(&user.ID, &user.Username, &user.Email)
+			Scan(&newUser.ID, &newUser.Username, &newUser.Email)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  500,
