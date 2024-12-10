@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/halosatrio/xwing/db"
 	"github.com/halosatrio/xwing/routes"
+	"github.com/halosatrio/xwing/utils"
 	"github.com/joho/godotenv"
 )
 
@@ -38,6 +39,7 @@ func setupRouter(db *sql.DB) *gin.Engine {
 		// RegisterRoute
 		v1.POST("/auth/register", routes.RegisterRoute(db))
 		v1.GET("/auth/login", routes.LoginUser(db))
+		v1.Use(utils.JWTAuth()).GET("/auth/user", routes.GetUser())
 
 		// health check
 		v1.GET("/test", func(c *gin.Context) {

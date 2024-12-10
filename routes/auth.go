@@ -198,3 +198,20 @@ func LoginUser(db *sql.DB) gin.HandlerFunc {
 		})
 	}
 }
+
+func GetUser() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, _ := c.MustGet("user_id").(float64)
+		email, _ := c.MustGet("email").(string)
+
+		// Respond with success
+		c.JSON(http.StatusOK, gin.H{
+			"status":  http.StatusOK,
+			"message": "Success Login!",
+			"data": gin.H{
+				"user_id": userID,
+				"email":   email,
+			},
+		})
+	}
+}
