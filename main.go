@@ -36,10 +36,13 @@ func setupRouter(db *sql.DB) *gin.Engine {
 	// AS BASEPATH
 	v1 := r.Group("/v1")
 	{
-		// RegisterRoute
+		// Register Routes
 		v1.POST("/auth/register", routes.RegisterRoute(db))
 		v1.GET("/auth/login", routes.LoginUser(db))
 		v1.Use(utils.JWTAuth()).GET("/auth/user", routes.GetUser())
+
+		// Transaction Routes
+		v1.Use(utils.JWTAuth()).GET("/transaction", routes.GetAllTransactions(db))
 
 		// health check
 		v1.GET("/test", func(c *gin.Context) {
