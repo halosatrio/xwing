@@ -3,6 +3,7 @@ package routes
 import (
 	"database/sql"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/halosatrio/xwing/models"
@@ -129,8 +130,25 @@ func GetTransactionById(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var txID transactionID
 		var transaction models.TransactionSchema
+
+		// Validate URI parameter
 		if err := c.ShouldBindUri(&txID); err != nil {
-			c.JSON(400, gin.H{"msg": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status":  http.StatusBadRequest,
+				"message": "Invalid URI parameter!",
+				"errors":  err.Error(),
+			})
+			return
+		}
+
+		// Convert ID to integer
+		id, err := strconv.Atoi(txID.ID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status":  http.StatusBadRequest,
+				"message": "Transaction ID must be an integer!",
+				"errors":  err.Error(),
+			})
 			return
 		}
 
@@ -150,7 +168,7 @@ func GetTransactionById(db *sql.DB) gin.HandlerFunc {
 			WHERE user_id=$1 AND is_active=true AND id=$2
 		`
 
-		err := db.QueryRow(query, userID, txID.ID).
+		err = db.QueryRow(query, userID, id).
 			Scan(
 				&transaction.ID,
 				&transaction.UserId,
@@ -164,9 +182,9 @@ func GetTransactionById(db *sql.DB) gin.HandlerFunc {
 				&transaction.UpdatedAt,
 			)
 		if err == sql.ErrNoRows {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"status":  http.StatusUnauthorized,
-				"message": "Invalid ID",
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  http.StatusNotFound,
+				"message": "Transaction not found",
 			})
 			return
 		} else if err != nil {
