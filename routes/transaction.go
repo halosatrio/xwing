@@ -120,3 +120,24 @@ func GetAllTransactions(db *sql.DB) gin.HandlerFunc {
 		})
 	}
 }
+
+type transactionID struct {
+	ID string `uri:"id" binding:"required"`
+}
+
+func GetTransactionById(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var txID transactionID
+		if err := c.ShouldBindUri(&txID); err != nil {
+			c.JSON(400, gin.H{"msg": err.Error()})
+			return
+		}
+
+		// success response
+		c.JSON(http.StatusOK, gin.H{
+			"status":  http.StatusOK,
+			"message": "Success!",
+			"data":    txID.ID,
+		})
+	}
+}
