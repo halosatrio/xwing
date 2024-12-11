@@ -128,8 +128,53 @@ type transactionID struct {
 func GetTransactionById(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var txID transactionID
+		var transaction models.TransactionSchema
 		if err := c.ShouldBindUri(&txID); err != nil {
 			c.JSON(400, gin.H{"msg": err.Error()})
+			return
+		}
+
+		userID, ok := c.MustGet("user_id").(float64)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"status":  http.StatusUnauthorized,
+				"message": "Unauthorized user",
+			})
+			return
+		}
+
+		// query
+		query := `
+			SELECT id, user_id, type, amount, category, date, notes, is_active, created_at, updated_at
+			FROM swordfish.transactions
+			WHERE user_id=$1 AND is_active=true AND id=$2
+		`
+
+		err := db.QueryRow(query, userID, txID.ID).
+			Scan(
+				&transaction.ID,
+				&transaction.UserId,
+				&transaction.Type,
+				&transaction.Amount,
+				&transaction.Category,
+				&transaction.Date,
+				&transaction.Notes,
+				&transaction.IsActive,
+				&transaction.CreatedAt,
+				&transaction.UpdatedAt,
+			)
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"status":  http.StatusUnauthorized,
+				"message": "Invalid ID",
+			})
+			return
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  http.StatusInternalServerError,
+				"message": "Database error",
+				"error":   err.Error(),
+			})
 			return
 		}
 
@@ -137,7 +182,7 @@ func GetTransactionById(db *sql.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  http.StatusOK,
 			"message": "Success!",
-			"data":    txID.ID,
+			"data":    transaction,
 		})
 	}
 }
