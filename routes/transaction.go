@@ -8,43 +8,64 @@ import (
 	"github.com/halosatrio/xwing/models"
 )
 
-// type transactionQueryReq struct {
-// 	DateStart string `json:"email" binding:"required,email"`
-// 	DateEnd   string `json:"password" binding:"required,min=8"`
-// 	Category  string `json:"category" binding:"required,min=8"`
-// }
+type transactionQueryReq struct {
+	DateStart string `form:"date_start"`
+	DateEnd   string `form:"date_end"`
+	Category  string `form:"category"`
+}
 
 func GetAllTransactions(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// var transactionReq transactionQueryReq
-		var transactions models.TransactionSchema
-		userID, _ := c.MustGet("user_id").(float64)
-		// email, _ := c.MustGet("email").(string)
+		var transactions []models.TransactionSchema
+		var queryReq transactionQueryReq
 
-		queryGetTransaction := `
+		// Bind query parameters
+		if err := c.BindQuery(&queryReq); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status":  http.StatusBadRequest,
+				"message": "Invalid query parameters!",
+				"errors":  err.Error(),
+			})
+			return
+		}
+
+		userID, ok := c.MustGet("user_id").(float64)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"status":  http.StatusUnauthorized,
+				"message": "Unauthorized user",
+			})
+			return
+		}
+
+		// Base query
+		query := `
 			SELECT id, user_id, type, amount, category, date, notes, is_active, created_at, updated_at
 			FROM swordfish.transactions
-			WHERE
-				user_id=$1
-				AND
-				is_active=true
-			LIMIT 200	
+			WHERE user_id=$1 AND is_active=true
 		`
 
-		err := db.QueryRow(queryGetTransaction, userID).
-			Scan(
-				&transactions.ID,
-				&transactions.UserId,
-				&transactions.Type,
-				&transactions.Amount,
-				&transactions.Category,
-				&transactions.Date,
-				&transactions.Notes,
-				&transactions.IsActive,
-				&transactions.CreatedAt,
-				&transactions.UpdatedAt,
-			)
+		// Query parameters for filtering
+		var args []interface{}
+		args = append(args, userID)
 
+		if queryReq.DateStart != "" {
+			query += " AND date >= $2"
+			args = append(args, queryReq.DateStart)
+		}
+		if queryReq.DateEnd != "" {
+			query += " AND date <= $3"
+			args = append(args, queryReq.DateEnd)
+		}
+		if queryReq.Category != "" {
+			query += " AND category = $4"
+			args = append(args, queryReq.Category)
+		}
+
+		query += " ORDER BY date ASC LIMIT 200"
+
+		// Execute query
+		rows, err := db.Query(query, args...)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  http.StatusInternalServerError,
@@ -53,12 +74,49 @@ func GetAllTransactions(db *sql.DB) gin.HandlerFunc {
 			})
 			return
 		}
+		defer rows.Close()
+
+		// Scan rows
+		for rows.Next() {
+			var transaction models.TransactionSchema
+			err := rows.Scan(
+				&transaction.ID,
+				&transaction.UserId,
+				&transaction.Type,
+				&transaction.Amount,
+				&transaction.Category,
+				&transaction.Date,
+				&transaction.Notes,
+				&transaction.IsActive,
+				&transaction.CreatedAt,
+				&transaction.UpdatedAt,
+			)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"status":  http.StatusInternalServerError,
+					"message": "Failed to parse transaction data!",
+					"error":   err.Error(),
+				})
+				return
+			}
+			transactions = append(transactions, transaction)
+		}
+
+		// Check for row iteration errors
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  http.StatusInternalServerError,
+				"message": "Error iterating over transactions!",
+				"error":   err.Error(),
+			})
+			return
+		}
 
 		// Respond with success
 		c.JSON(http.StatusOK, gin.H{
 			"status":  http.StatusOK,
-			"message": "Success Login!",
-			"data":    "hehe",
+			"message": "Success!",
+			"data":    transactions,
 		})
 	}
 }
