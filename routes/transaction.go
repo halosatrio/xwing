@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/halosatrio/xwing/models"
@@ -205,12 +206,69 @@ func GetTransactionById(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+type createTransactionReq struct {
+	Type     string `json:"type" binding:"required"`
+	Amount   int    `json:"amount" binding:"required"`
+	Category string `json:"category" binding:"required"`
+	Date     string `json:"date" binding:"required"`
+	Notes    string `json:"notes"`
+}
+
 func PostCreateTransaction(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var createTxReq createTransactionReq
+
+		// Validate request body
+		if err := c.ShouldBindJSON(&createTxReq); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status":  400,
+				"message": "Failed to create transaction!",
+				"errors":  err.Error(),
+			})
+			return
+		}
+
+		// Validate user from JWT
+		userID, ok := c.MustGet("user_id").(float64)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"status":  http.StatusUnauthorized,
+				"message": "Unauthorized user",
+			})
+			return
+		}
+
+		query := `
+      INSERT INTO swordfish.transactions ( user_id, type, amount, category, date, notes, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, user_id, type, amount, category, date, notes, created_at, updated_at
+    `
+		var newTransaction models.TransactionSchema
+		err := db.QueryRow(query, userID, createTxReq.Type, createTxReq.Amount, createTxReq.Category, createTxReq.Date, createTxReq.Notes, time.Now(), time.Now()).
+			Scan(
+				&newTransaction.ID,
+				&newTransaction.UserId,
+				&newTransaction.Type,
+				&newTransaction.Amount,
+				&newTransaction.Category,
+				&newTransaction.Date,
+				&newTransaction.Notes,
+				&newTransaction.CreatedAt,
+				&newTransaction.UpdatedAt,
+			)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  500,
+				"message": "Failed to insert transaction into database!",
+				"error":   err.Error(),
+			})
+			return
+		}
 
 		c.JSON(http.StatusOK, gin.H{
 			"status":  http.StatusOK,
-			"message": "Success!",
+			"message": "Success create transaction!",
+			"data":    newTransaction,
 		})
 	}
 }
