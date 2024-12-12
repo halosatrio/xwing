@@ -2,6 +2,7 @@ package routes
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -438,16 +439,23 @@ func DeleteTransaction(db *sql.DB) gin.HandlerFunc {
 }
 
 type monthlySummaryQueryReq struct {
-	DateStart string `form:"date_start"`
-	DateEnd   string `form:"date_end"`
+	DateStart string `form:"date_start" binding:"required"`
+	DateEnd   string `form:"date_end" binding:"required"`
+}
+
+type monthlySummaryData struct {
+	Category    string `json:"category"`
+	TotalAmount int    `json:"total_amount"`
+	Count       int    `json:"count"`
 }
 
 func GetMonthlySummary(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var monthlySummaryReq monthlySummaryQueryReq
+		var queryReq monthlySummaryQueryReq
+		var summaryData []monthlySummaryData
 
 		// Bind query parameters
-		if err := c.BindQuery(&monthlySummaryReq); err != nil {
+		if err := c.BindQuery(&queryReq); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"status":  http.StatusBadRequest,
 				"message": "Invalid query parameters!",
@@ -465,10 +473,57 @@ func GetMonthlySummary(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		summaryQuery := `
+      SELECT category, SUM(amount) AS total_amount, COUNT(id) as count
+      FROM swordfish.transactions as tx
+      WHERE tx.user_id = $1 AND tx.is_active = true AND tx.date BETWEEN $2 AND $3
+      GROUP BY category;
+    `
+		// Execute query
+		rows, err := db.Query(summaryQuery, userID, queryReq.DateStart, queryReq.DateEnd)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  http.StatusInternalServerError,
+				"message": "Failed to fetch summary transaction!",
+				"error":   err.Error(),
+			})
+			return
+		}
+		defer rows.Close()
+
+		// Scan rows
+		for rows.Next() {
+			var summary monthlySummaryData
+			err := rows.Scan(
+				&summary.Category,
+				&summary.TotalAmount,
+				&summary.Count,
+			)
+			log.Println(summary)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"status":  http.StatusInternalServerError,
+					"message": "Failed to parse summary data!",
+					"error":   err.Error(),
+				})
+				return
+			}
+			summaryData = append(summaryData, summary)
+		}
+		// Check for row iteration errors
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  http.StatusInternalServerError,
+				"message": "Error iterating over summary transactions!",
+				"error":   err.Error(),
+			})
+			return
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"status":  http.StatusOK,
 			"message": "Successs!",
-			"data":    userID,
+			"data":    summaryData,
 		})
 	}
 }
