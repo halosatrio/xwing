@@ -308,28 +308,46 @@ func PutUpdateTransaction(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Validate request body
+		if err := c.ShouldBindJSON(&updateTxReq); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status":  400,
+				"message": "Failed to update transaction!",
+				"errors":  err.Error(),
+			})
+			return
+		}
+
+		var updatedTransaction models.TransactionSchema
 		query := `
-      INSERT INTO swordfish.transactions ( user_id, type, amount, category, date, notes, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING id, user_id, type, amount, category, date, notes, created_at, updated_at
-    `
-		var newTransaction models.TransactionSchema
-		err = db.QueryRow(query, userID, updateTxReq.Type, updateTxReq.Amount, updateTxReq.Category, updateTxReq.Date, updateTxReq.Notes, time.Now()).
+			UPDATE swordfish.transactions
+			SET type = $1, amount = $2, category = $3, date = $4, notes = $5, updated_at = $6
+			WHERE id = $7 AND user_id = $8 AND is_active = true
+			RETURNING id, user_id, type, amount, category, date, notes, is_active, created_at, updated_at
+		`
+		err = db.QueryRow(query, updateTxReq.Type, updateTxReq.Amount, updateTxReq.Category, updateTxReq.Date, updateTxReq.Notes, time.Now(), id, userID).
 			Scan(
-				&newTransaction.ID,
-				&newTransaction.UserId,
-				&newTransaction.Type,
-				&newTransaction.Amount,
-				&newTransaction.Category,
-				&newTransaction.Date,
-				&newTransaction.Notes,
-				&newTransaction.CreatedAt,
-				&newTransaction.UpdatedAt,
+				&updatedTransaction.ID,
+				&updatedTransaction.UserId,
+				&updatedTransaction.Type,
+				&updatedTransaction.Amount,
+				&updatedTransaction.Category,
+				&updatedTransaction.Date,
+				&updatedTransaction.Notes,
+				&updatedTransaction.IsActive,
+				&updatedTransaction.CreatedAt,
+				&updatedTransaction.UpdatedAt,
 			)
-		if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  http.StatusNotFound,
+				"message": "Transaction not found",
+			})
+			return
+		} else if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  500,
-				"message": "Failed to insert transaction into database!",
+				"status":  http.StatusInternalServerError,
+				"message": "Database error",
 				"error":   err.Error(),
 			})
 			return
@@ -339,6 +357,7 @@ func PutUpdateTransaction(db *sql.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  http.StatusOK,
 			"message": "Success update transaction!",
+			"data":    updatedTransaction,
 		})
 	}
 }
