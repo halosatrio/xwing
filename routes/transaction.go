@@ -571,11 +571,16 @@ func GetMonthlySummary(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		cashflowMap := map[string]int{"inflow": 0, "outflow": 0}
+		for _, cashflow := range cashflowData {
+			cashflowMap[cashflow.Type] += cashflow.Cashflow
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"status":  http.StatusOK,
 			"message": "Successs!",
 			"data": gin.H{
-				"cashflow": cashflowData,
+				"cashflow": cashflowMap,
 				"summary":  summaryData,
 			},
 		})
