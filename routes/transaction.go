@@ -448,11 +448,16 @@ type monthlySummaryData struct {
 	TotalAmount int    `json:"total_amount"`
 	Count       int    `json:"count"`
 }
+type monthlyCashfowData struct {
+	Type     string `json:"type"`
+	Cashflow int    `json:"cashflow"`
+}
 
 func GetMonthlySummary(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var queryReq monthlySummaryQueryReq
 		var summaryData []monthlySummaryData
+		var cashflowData []monthlyCashfowData
 
 		// Bind query parameters
 		if err := c.BindQuery(&queryReq); err != nil {
@@ -480,7 +485,7 @@ func GetMonthlySummary(db *sql.DB) gin.HandlerFunc {
       GROUP BY category;
     `
 		// Execute query
-		rows, err := db.Query(summaryQuery, userID, queryReq.DateStart, queryReq.DateEnd)
+		summaryRows, err := db.Query(summaryQuery, userID, queryReq.DateStart, queryReq.DateEnd)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  http.StatusInternalServerError,
@@ -489,12 +494,12 @@ func GetMonthlySummary(db *sql.DB) gin.HandlerFunc {
 			})
 			return
 		}
-		defer rows.Close()
+		defer summaryRows.Close()
 
-		// Scan rows
-		for rows.Next() {
+		// Scan summaryRows
+		for summaryRows.Next() {
 			var summary monthlySummaryData
-			err := rows.Scan(
+			err := summaryRows.Scan(
 				&summary.Category,
 				&summary.TotalAmount,
 				&summary.Count,
@@ -511,7 +516,53 @@ func GetMonthlySummary(db *sql.DB) gin.HandlerFunc {
 			summaryData = append(summaryData, summary)
 		}
 		// Check for row iteration errors
-		if err := rows.Err(); err != nil {
+		if err := summaryRows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  http.StatusInternalServerError,
+				"message": "Error iterating over summary transactions!",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		cashflowQuery := `
+      SELECT type, SUM(amount) as cashflow
+      FROM swordfish.transactions as tx 
+      WHERE tx.user_id = $1 AND tx.is_active = true AND tx.date BETWEEN $2 AND $3
+      GROUP BY type
+    `
+		// Execute query
+		cashflowRows, err := db.Query(cashflowQuery, userID, queryReq.DateStart, queryReq.DateEnd)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  http.StatusInternalServerError,
+				"message": "Failed to fetch cashflow transaction!",
+				"error":   err.Error(),
+			})
+			return
+		}
+		defer cashflowRows.Close()
+
+		// Scan cashflowRows
+		for cashflowRows.Next() {
+			var cashflow monthlyCashfowData
+			err := cashflowRows.Scan(
+				&cashflow.Type,
+				&cashflow.Cashflow,
+			)
+			log.Println(cashflow)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"status":  http.StatusInternalServerError,
+					"message": "Failed to parse summary data!",
+					"error":   err.Error(),
+				})
+				return
+			}
+			cashflowData = append(cashflowData, cashflow)
+		}
+		// Check for row iteration errors
+		if err := cashflowRows.Err(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  http.StatusInternalServerError,
 				"message": "Error iterating over summary transactions!",
@@ -523,7 +574,10 @@ func GetMonthlySummary(db *sql.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  http.StatusOK,
 			"message": "Successs!",
-			"data":    summaryData,
+			"data": gin.H{
+				"cashflow": cashflowData,
+				"summary":  summaryData,
+			},
 		})
 	}
 }
