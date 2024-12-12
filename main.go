@@ -46,6 +46,7 @@ func setupRouter(db *sql.DB) *gin.Engine {
 		v1.Use(utils.JWTAuth()).GET("/transaction/:id", routes.GetTransactionById(db))
 		v1.Use(utils.JWTAuth()).POST("/transaction/create", routes.PostCreateTransaction(db))
 		v1.Use(utils.JWTAuth()).PUT("/transaction/:id", routes.PutUpdateTransaction(db))
+		v1.Use(utils.JWTAuth()).DELETE("/transaction/:id", routes.DeleteTransaction(db))
 		// DELETE remove transaction
 		// GET monthly transaction
 

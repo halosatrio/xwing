@@ -2,6 +2,7 @@ package routes
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -358,6 +359,84 @@ func PutUpdateTransaction(db *sql.DB) gin.HandlerFunc {
 			"status":  http.StatusOK,
 			"message": "Success update transaction!",
 			"data":    updatedTransaction,
+		})
+	}
+}
+
+func DeleteTransaction(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var txID transactionID
+
+		// Validate URI parameter
+		if err := c.ShouldBindUri(&txID); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status":  http.StatusBadRequest,
+				"message": "Invalid URI parameter!",
+				"errors":  err.Error(),
+			})
+			return
+		}
+
+		// Convert ID to integer
+		id, err := strconv.Atoi(txID.ID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status":  http.StatusBadRequest,
+				"message": "Transaction ID must be an integer!",
+				"errors":  err.Error(),
+			})
+			return
+		}
+
+		userID, ok := c.MustGet("user_id").(float64)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"status":  http.StatusUnauthorized,
+				"message": "Unauthorized user",
+			})
+			return
+		}
+
+		query := `
+      UPDATE swordfish.transactions
+      SET is_active = false, updated_at = $1
+      WHERE id = $2 AND user_id = $3 AND is_active = true
+			RETURNING id, type, amount, category, date, notes
+    `
+		result, err := db.Exec(query, time.Now(), id, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  http.StatusInternalServerError,
+				"message": "Database error",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		// Check if any rows were affected
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  http.StatusInternalServerError,
+				"message": "Error checking update result",
+				"error":   err.Error(),
+			})
+			return
+		}
+
+		if rowsAffected == 0 {
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  http.StatusNotFound,
+				"message": "Transaction not found, no changes made",
+			})
+			return
+		}
+
+		log.Println(rowsAffected)
+
+		c.JSON(http.StatusOK, gin.H{
+			"status":  http.StatusOK,
+			"message": "Success delete transaction",
 		})
 	}
 }
