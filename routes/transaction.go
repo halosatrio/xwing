@@ -436,3 +436,39 @@ func DeleteTransaction(db *sql.DB) gin.HandlerFunc {
 		})
 	}
 }
+
+type monthlySummaryQueryReq struct {
+	DateStart string `form:"date_start"`
+	DateEnd   string `form:"date_end"`
+}
+
+func GetMonthlySummary(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var monthlySummaryReq monthlySummaryQueryReq
+
+		// Bind query parameters
+		if err := c.BindQuery(&monthlySummaryReq); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status":  http.StatusBadRequest,
+				"message": "Invalid query parameters!",
+				"errors":  err.Error(),
+			})
+			return
+		}
+
+		userID, ok := c.MustGet("user_id").(float64)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"status":  http.StatusUnauthorized,
+				"message": "Unauthorized user",
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status":  http.StatusOK,
+			"message": "Successs!",
+			"data":    userID,
+		})
+	}
+}
