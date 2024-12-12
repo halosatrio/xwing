@@ -2,7 +2,6 @@ package routes
 
 import (
 	"database/sql"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -401,7 +400,6 @@ func DeleteTransaction(db *sql.DB) gin.HandlerFunc {
       UPDATE swordfish.transactions
       SET is_active = false, updated_at = $1
       WHERE id = $2 AND user_id = $3 AND is_active = true
-			RETURNING id, type, amount, category, date, notes
     `
 		result, err := db.Exec(query, time.Now(), id, userID)
 		if err != nil {
@@ -427,16 +425,14 @@ func DeleteTransaction(db *sql.DB) gin.HandlerFunc {
 		if rowsAffected == 0 {
 			c.JSON(http.StatusNotFound, gin.H{
 				"status":  http.StatusNotFound,
-				"message": "Transaction not found, no changes made",
+				"message": "Transaction not found or already inactive",
 			})
 			return
 		}
 
-		log.Println(rowsAffected)
-
 		c.JSON(http.StatusOK, gin.H{
 			"status":  http.StatusOK,
-			"message": "Success delete transaction",
+			"message": "Transaction deleted successfully",
 		})
 	}
 }
