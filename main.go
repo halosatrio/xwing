@@ -44,6 +44,21 @@ func setupRouter(db *sql.DB) *gin.Engine {
 		// Transaction Routes
 		v1.Use(utils.JWTAuth()).GET("/transaction", routes.GetAllTransactions(db))
 		v1.Use(utils.JWTAuth()).GET("/transaction/:id", routes.GetTransactionById(db))
+		// POST create transaction
+		// PUT update transaction
+		// DELETE remove transaction
+		// GET monthly transaction
+
+		// Report Routes
+		// GET Quarter Essentials
+		// GET Quarter Non-Essentials
+		// GET Quarter Shopping
+		// GET Annual
+		// GET Annual Cashflow
+
+		// Asset Routes
+		// GET Assets
+		// POST create asset
 
 		// health check
 		v1.GET("/test", func(c *gin.Context) {
