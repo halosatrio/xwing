@@ -12,7 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type quarterEssentialsQueryReq struct {
+type quarterQueryReq struct {
 	Year string `form:"year" binding:"required"`
 	Q    string `form:"q" binding:"required"`
 }
@@ -87,12 +87,12 @@ func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, categories
 	}
 
 	query := `
-		SELECT category, CAST(SUM(amount) AS INTEGER) as amount
-		FROM swordfish.transactions
-		WHERE user_id = $1 
-			AND is_active = true 
-			AND date BETWEEN $2 AND $3
-			AND category IN ($4)
+		SELECT category, SUM(amount) as amount
+		FROM swordfish.transactions as tx
+		WHERE tx.user_id = $1 
+			AND tx.is_active = true 
+			AND tx.date BETWEEN $2 AND $3
+			AND tx.category IN ($4)
 		GROUP BY category
 	`
 	rows, err := db.Query(query, userID, date1, date2, fmt.Sprintf("(%s)", strings.Join(quoted, ", ")))
@@ -109,12 +109,13 @@ func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, categories
 		}
 		result = append(result, transaction)
 	}
+	// log.Print(rows)
 	return result, nil
 }
 
 func GetQuarterEssentials(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var queryReq quarterEssentialsQueryReq
+		var queryReq quarterQueryReq
 
 		// Bind query parameters
 		if err := c.BindQuery(&queryReq); err != nil {
@@ -172,6 +173,80 @@ func GetQuarterEssentials(db *sql.DB) gin.HandlerFunc {
 				return
 			}
 			results = append(results, checkCategory(res, essentials))
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status":  200,
+			"message": "Success!",
+			"data": gin.H{
+				"month1": results[0],
+				"month2": results[1],
+				"month3": results[2],
+			},
+		})
+	}
+}
+
+func GetQuarterNonEssentials(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var queryReq quarterQueryReq
+
+		// Bind query parameters
+		if err := c.BindQuery(&queryReq); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status":  http.StatusBadRequest,
+				"message": "Invalid query parameters!",
+				"errors":  err.Error(),
+			})
+			return
+		}
+
+		// userID, ok := c.MustGet("user_id").(float64)
+		userID, ok := c.MustGet("user_id").(float64)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"status":  http.StatusUnauthorized,
+				"message": "Unauthorized user",
+			})
+			return
+		}
+
+		if _, err := strconv.Atoi(queryReq.Year); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": 400, "message": "Year must be a number"})
+			return
+		}
+		if _, err := strconv.Atoi(queryReq.Q); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": 400, "message": "Quarter must be a number"})
+			return
+		}
+
+		nonEssentials := []string{"misc", "family", "transport", "traveling", "healthcare", "date"}
+
+		// Define date ranges for the quarter
+		months := [][]string{}
+		for i := 0; i < 3; i++ {
+			start, err := getFirstDate(queryReq.Year, queryReq.Q, i)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"status": 400, "message": err.Error()})
+				return
+			}
+			end, err := getLastDate(queryReq.Year, queryReq.Q, i)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"status": 400, "message": err.Error()})
+				return
+			}
+			months = append(months, []string{start, end})
+		}
+
+		var results [][]Transaction
+		for _, month := range months {
+			res, err := getQuarterQuery(db, userID, month[0], month[1], nonEssentials)
+			if err != nil {
+				log.Printf("Error fetching query: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"status": 500, "message": "Error fetching data"})
+				return
+			}
+			results = append(results, checkCategory(res, nonEssentials))
 		}
 
 		c.JSON(http.StatusOK, gin.H{
