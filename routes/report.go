@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,32 +14,7 @@ import (
 
 type quarterEssentialsQueryReq struct {
 	Year string `form:"year" binding:"required"`
-	Q    string `form:"q" binding:"required, oneof=1 2 3 4"`
-}
-
-func GetReportQuarterEssentials(db *sql.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var queryReq quarterEssentialsQueryReq
-
-		// Bind query parameters
-		if err := c.BindQuery(&queryReq); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  http.StatusBadRequest,
-				"message": "Invalid query parameters!",
-				"errors":  err.Error(),
-			})
-			return
-		}
-
-		// query := `
-		// 	SELECT category, amount
-		// `
-
-		c.JSON(http.StatusOK, gin.H{
-			"status":  http.StatusOK,
-			"message": "Success",
-		})
-	}
+	Q    string `form:"q" binding:"required"`
 }
 
 type Transaction struct {
@@ -46,44 +22,41 @@ type Transaction struct {
 	Amount   int    `json:"amount"`
 }
 
-// QUARTER_MONTH maps quarter numbers to their respective months.
-var QUARTER_MONTH = map[string][]string{
-	"1": {"January", "February", "March"},
-	"2": {"April", "May", "June"},
-	"3": {"July", "August", "September"},
-	"4": {"October", "November", "December"},
+// QUARTER_MONTH is a mapping for the quarters and months
+var QUARTER_MONTH = map[string][]int{
+	"1": {1, 2, 3},
+	"2": {4, 5, 6},
+	"3": {7, 8, 9},
+	"4": {10, 11, 12},
 }
 
 // getFirstDate returns the first date of a specified year, quarter, and month index.
-func getFirstDate(year, quarter string, month int) (string, error) {
-	months, ok := QUARTER_MONTH[quarter]
-	if !ok || month >= len(months) {
+func getFirstDate(year, q string, month int) (string, error) {
+	m, ok := QUARTER_MONTH[q]
+	if !ok || month >= len(m) {
 		return "", fmt.Errorf("invalid quarter or month")
 	}
-
-	dateStr := fmt.Sprintf("%s %s 01", months[month], year) // Format: "January 2024 01"
-	t, err := time.Parse("January 2006 02", dateStr)
+	date := fmt.Sprintf("%s-%02d-01", year, m[month])
+	parsed, err := time.Parse("2006-01-02", date)
 	if err != nil {
 		return "", fmt.Errorf("invalid date: %v", err)
 	}
-
-	return t.Format("2006-01-02"), nil
+	return parsed.Format("2006-01-02"), nil
 }
 
 // getLastDate returns the last date of a specified year, quarter, and month index.
-func getLastDate(year, quarter string, month int) (string, error) {
-	firstDateStr, err := getFirstDate(year, quarter, month)
-	if err != nil {
-		return "", err
+func getLastDate(year, q string, month int) (string, error) {
+	m, ok := QUARTER_MONTH[q]
+	if !ok || month >= len(m) {
+		return "", fmt.Errorf("invalid quarter or month")
 	}
-
-	t, err := time.Parse("2006-01-02", firstDateStr)
+	date := fmt.Sprintf("%s-%02d-01", year, m[month])
+	parsed, err := time.Parse("2006-01-02", date)
 	if err != nil {
 		return "", fmt.Errorf("invalid date: %v", err)
 	}
-
-	lastDay := t.AddDate(0, 1, -1) // Move to the last day of the month.
-	return lastDay.Format("2006-01-02"), nil
+	endOfMonth := parsed.AddDate(0, 1, -1)
+	return endOfMonth.Format("2006-01-02"), nil
 }
 
 func checkCategory(resQuery []Transaction, categories []string) []Transaction {
@@ -107,14 +80,22 @@ func checkCategory(resQuery []Transaction, categories []string) []Transaction {
 	return append(resQuery, missingItems...)
 }
 
-func getQuarterQuery(db *sql.DB, userID int, date1, date2 string, categories []string) ([]Transaction, error) {
+func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, categories []string) ([]Transaction, error) {
+	quoted := make([]string, len(categories))
+	for i, s := range categories {
+		quoted[i] = fmt.Sprintf("'%s'", s)
+	}
+
 	query := `
-        SELECT category, CAST(SUM(amount) AS INTEGER) as amount
-        FROM transactions
-        WHERE user_id = $1 AND is_active = true AND date BETWEEN $2 AND $3 AND category = ANY($4)
-        GROUP BY category
-    `
-	rows, err := db.Query(query, userID, date1, date2, categories)
+		SELECT category, CAST(SUM(amount) AS INTEGER) as amount
+		FROM swordfish.transactions
+		WHERE user_id = $1 
+			AND is_active = true 
+			AND date BETWEEN $2 AND $3
+			AND category IN ($4)
+		GROUP BY category
+	`
+	rows, err := db.Query(query, userID, date1, date2, fmt.Sprintf("(%s)", strings.Join(quoted, ", ")))
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +112,7 @@ func getQuarterQuery(db *sql.DB, userID int, date1, date2 string, categories []s
 	return result, nil
 }
 
-func QuarterEssentialsHandler(db *sql.DB) gin.HandlerFunc {
+func GetQuarterEssentials(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var queryReq quarterEssentialsQueryReq
 
@@ -146,7 +127,7 @@ func QuarterEssentialsHandler(db *sql.DB) gin.HandlerFunc {
 		}
 
 		// userID, ok := c.MustGet("user_id").(float64)
-		userID, ok := c.MustGet("user_id").(int)
+		userID, ok := c.MustGet("user_id").(float64)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"status":  http.StatusUnauthorized,
