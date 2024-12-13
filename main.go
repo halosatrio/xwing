@@ -50,6 +50,7 @@ func setupRouter(db *sql.DB) *gin.Engine {
 		v1.Use(utils.JWTAuth()).GET("/transaction/monthly-summary", routes.GetMonthlySummary(db))
 
 		// Report Routes
+		v1.Use(utils.JWTAuth()).GET("/report/quarter/essentials", routes.GetReportQuarterEssentials(db))
 		// GET Quarter Essentials
 		// GET Quarter Non-Essentials
 		// GET Quarter Shopping
