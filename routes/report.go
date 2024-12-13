@@ -85,6 +85,7 @@ func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, categories
 	for i, s := range categories {
 		quoted[i] = fmt.Sprintf("'%s'", s)
 	}
+	cat := fmt.Sprintf("(%s)", strings.Join(quoted, ", "))
 
 	query := `
 		SELECT category, SUM(amount) as amount
@@ -95,7 +96,8 @@ func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, categories
 			AND tx.category IN ($4)
 		GROUP BY category
 	`
-	rows, err := db.Query(query, userID, date1, date2, fmt.Sprintf("(%s)", strings.Join(quoted, ", ")))
+	log.Print(query)
+	rows, err := db.Query(query, userID, date1, date2, cat)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +111,7 @@ func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, categories
 		}
 		result = append(result, transaction)
 	}
-	// log.Print(rows)
+	log.Print(result)
 	return result, nil
 }
 
