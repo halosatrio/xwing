@@ -268,3 +268,77 @@ func GetQuarterNonEssentials(db *sql.DB) gin.HandlerFunc {
 		})
 	}
 }
+
+func GetQuarterShopping(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var queryReq quarterQueryReq
+
+		// Bind query parameters
+		if err := c.BindQuery(&queryReq); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"status":  http.StatusBadRequest,
+				"message": "Invalid query parameters!",
+				"errors":  err.Error(),
+			})
+			return
+		}
+
+		// userID, ok := c.MustGet("user_id").(float64)
+		userID, ok := c.MustGet("user_id").(float64)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"status":  http.StatusUnauthorized,
+				"message": "Unauthorized user",
+			})
+			return
+		}
+
+		if _, err := strconv.Atoi(queryReq.Year); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": 400, "message": "Year must be a number"})
+			return
+		}
+		if _, err := strconv.Atoi(queryReq.Q); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": 400, "message": "Quarter must be a number"})
+			return
+		}
+
+		shopping := []string{"belanja"}
+
+		// Define date ranges for the quarter
+		months := [][]string{}
+		for i := 0; i < 3; i++ {
+			start, err := getFirstDate(queryReq.Year, queryReq.Q, i)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"status": 400, "message": err.Error()})
+				return
+			}
+			end, err := getLastDate(queryReq.Year, queryReq.Q, i)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"status": 400, "message": err.Error()})
+				return
+			}
+			months = append(months, []string{start, end})
+		}
+
+		var results [][]Transaction
+		for _, month := range months {
+			res, err := getQuarterQuery(db, userID, month[0], month[1], "SHOPPING")
+			if err != nil {
+				log.Printf("Error fetching query: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"status": 500, "message": "Error fetching data"})
+				return
+			}
+			results = append(results, checkCategory(res, shopping))
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"status":  200,
+			"message": "Success!",
+			"data": gin.H{
+				"month1": results[0],
+				"month2": results[1],
+				"month3": results[2],
+			},
+		})
+	}
+}
