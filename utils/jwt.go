@@ -60,14 +60,3 @@ func JWTAuth() gin.HandlerFunc {
 		c.Next()
 	}
 }
-
-func GetUserIDJwt(c *gin.Context) float64 {
-	userID, ok := c.MustGet("user_id").(float64)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"status":  http.StatusUnauthorized,
-			"message": "Unauthorized user",
-		})
-	}
-	return userID
-}
