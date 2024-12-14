@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -80,11 +81,11 @@ func checkCategory(resQuery []Transaction, categories []string) []Transaction {
 }
 
 func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, categories []string) ([]Transaction, error) {
-	// quoted := make([]string, len(categories))
-	// for i, s := range categories {
-	// 	quoted[i] = fmt.Sprintf("'%s'", s)
-	// }
-	// cat := fmt.Sprintf("(%s)", strings.Join(quoted, ", "))
+	quoted := make([]string, len(categories))
+	for i, s := range categories {
+		quoted[i] = fmt.Sprintf("'%s'", s)
+	}
+	cat := fmt.Sprintf("(%s)", strings.Join(quoted, ", "))
 
 	query := `
 		SELECT category, SUM(amount) as amount
@@ -92,11 +93,11 @@ func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, categories
 		WHERE tx.user_id = $1 
 			AND tx.is_active = true 
 			AND tx.date BETWEEN $2 AND $3
-			AND tx.category IN ("makan", "cafe", "utils", "errand", "bensin", "olahraga")
+			AND tx.category IN ($4)
 		GROUP BY category
 	`
 	log.Print(query)
-	rows, err := db.Query(query, userID, date1, date2)
+	rows, err := db.Query(query, userID, date1, date2, cat)
 	if err != nil {
 		return nil, err
 	}
