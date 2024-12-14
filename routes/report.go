@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -80,12 +79,9 @@ func checkCategory(resQuery []Transaction, categories []string) []Transaction {
 	return append(resQuery, missingItems...)
 }
 
-func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, categories []string) ([]Transaction, error) {
-	quoted := make([]string, len(categories))
-	for i, s := range categories {
-		quoted[i] = fmt.Sprintf("'%s'", s)
-	}
-	cat := fmt.Sprintf("(%s)", strings.Join(quoted, ", "))
+func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, category string) ([]Transaction, error) {
+	var args []interface{}
+	args = append(args, userID, date1, date2)
 
 	query := `
 		SELECT category, SUM(amount) as amount
@@ -93,11 +89,21 @@ func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, categories
 		WHERE tx.user_id = $1 
 			AND tx.is_active = true 
 			AND tx.date BETWEEN $2 AND $3
-			AND tx.category IN ($4)
-		GROUP BY category
 	`
+
+	// this might be a dumb fixing, but let's see
+	if category == "ESSENTIALS" {
+		query += ` AND tx.category IN ('makan', 'cafe', 'utils', 'errand', 'bensin', 'olahraga')`
+	} else if category == "NON-ESSENTIALS" {
+		query += ` AND tx.category IN ('misc', 'family', 'transport', 'traveling', 'healthcare', 'date')`
+	} else if category == "SHOPPING" {
+		query += ` AND tx.category IN ('belanja')`
+	}
+
+	query += " GROUP BY category"
+
 	log.Print(query)
-	rows, err := db.Query(query, userID, date1, date2, cat)
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +174,7 @@ func GetQuarterEssentials(db *sql.DB) gin.HandlerFunc {
 
 		var results [][]Transaction
 		for _, month := range months {
-			res, err := getQuarterQuery(db, userID, month[0], month[1], essentials)
+			res, err := getQuarterQuery(db, userID, month[0], month[1], "ESSENTIALS")
 			if err != nil {
 				log.Printf("Error fetching query: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"status": 500, "message": "Error fetching data"})
@@ -242,7 +248,7 @@ func GetQuarterNonEssentials(db *sql.DB) gin.HandlerFunc {
 
 		var results [][]Transaction
 		for _, month := range months {
-			res, err := getQuarterQuery(db, userID, month[0], month[1], nonEssentials)
+			res, err := getQuarterQuery(db, userID, month[0], month[1], "NON-ESSENTIALS")
 			if err != nil {
 				log.Printf("Error fetching query: %v", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"status": 500, "message": "Error fetching data"})
