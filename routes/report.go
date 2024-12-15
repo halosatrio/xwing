@@ -348,6 +348,13 @@ type AnnualQueryReq struct {
 	Year string `form:"year" binding:"required"`
 }
 
+type AnnualReport struct {
+	Month   int `json:"month"`
+	Inflow  int `json:"inflow"`
+	Outflow int `json:"outflow"`
+	Saving  int `json:"saving"`
+}
+
 func GetAnnualReport(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var queryReq AnnualQueryReq
@@ -393,10 +400,11 @@ func GetAnnualReport(db *sql.DB) gin.HandlerFunc {
 		}
 		defer rows.Close()
 
-		var result []Transaction
+		var result []AnnualReport
 		for rows.Next() {
-			var transaction Transaction
-			if err := rows.Scan(&transaction.Category, &transaction.Amount); err != nil {
+			var annualReportData AnnualReport
+			err := rows.Scan(&annualReportData.Month, &annualReportData.Inflow, &annualReportData.Outflow, &annualReportData.Saving)
+			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"status":  http.StatusInternalServerError,
 					"message": "Failed to parse data!",
@@ -404,7 +412,7 @@ func GetAnnualReport(db *sql.DB) gin.HandlerFunc {
 				})
 				return
 			}
-			result = append(result, transaction)
+			result = append(result, annualReportData)
 		}
 		log.Print(result)
 
