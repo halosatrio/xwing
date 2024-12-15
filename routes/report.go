@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/halosatrio/xwing/utils"
 )
 
 type quarterQueryReq struct {
@@ -102,7 +103,7 @@ func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, category s
 
 	query += " GROUP BY category"
 
-	log.Print(query)
+	// log.Print(query)
 	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, err
@@ -117,7 +118,7 @@ func getQuarterQuery(db *sql.DB, userID float64, date1, date2 string, category s
 		}
 		result = append(result, transaction)
 	}
-	log.Print(result)
+	// log.Print(result)
 	return result, nil
 }
 
@@ -209,7 +210,7 @@ func GetQuarterNonEssentials(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// userID, ok := c.MustGet("user_id").(float64)
+		// get userid jwt
 		userID, ok := c.MustGet("user_id").(float64)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -339,6 +340,79 @@ func GetQuarterShopping(db *sql.DB) gin.HandlerFunc {
 				"month2": results[1],
 				"month3": results[2],
 			},
+		})
+	}
+}
+
+type AnnualQueryReq struct {
+	Year string `form:"year" binding:"required"`
+}
+
+func GetAnnualReport(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var queryReq AnnualQueryReq
+
+		// Bind query parameters
+		if err := c.BindQuery(&queryReq); err != nil {
+			utils.RespondError(c, http.StatusBadRequest, "Invalid query parameters!", err.Error())
+			return
+		}
+
+		if _, err := strconv.Atoi(queryReq.Year); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": 400, "message": "Year must be a number"})
+			return
+		}
+
+		// get userid jwt
+		userID, _ := c.MustGet("user_id").(float64)
+
+		query := `
+			SELECT
+				cast(EXTRACT(MONTH FROM date) as int) AS month,
+				cast(SUM(CASE WHEN type = 'inflow' THEN amount ELSE 0 END) as int) AS inflow,
+				cast(SUM(CASE WHEN type = 'outflow' THEN amount ELSE 0 END) as int) AS outflow,
+				cast(SUM(CASE WHEN type = 'inflow' THEN amount ELSE 0 END) - SUM(CASE WHEN type = 'outflow' THEN amount ELSE 0 END) as int) AS saving
+			FROM
+				swordfish.transactions AS tx
+			WHERE
+				tx.user_id = $1 AND
+				tx.is_active = true
+				AND tx.date BETWEEN '2024-01-01' AND '2024-12-31'
+			GROUP BY month
+			ORDER BY month
+		`
+
+		rows, err := db.Query(query, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  http.StatusInternalServerError,
+				"message": "Failed to fetch data!",
+				"error":   err.Error(),
+			})
+			return
+		}
+		defer rows.Close()
+
+		var result []Transaction
+		for rows.Next() {
+			var transaction Transaction
+			if err := rows.Scan(&transaction.Category, &transaction.Amount); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"status":  http.StatusInternalServerError,
+					"message": "Failed to parse data!",
+					"error":   err.Error(),
+				})
+				return
+			}
+			result = append(result, transaction)
+		}
+		log.Print(result)
+
+		// success response
+		c.JSON(http.StatusOK, gin.H{
+			"status":  http.StatusOK,
+			"message": "Success",
+			"data":    result,
 		})
 	}
 }
