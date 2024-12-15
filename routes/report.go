@@ -373,7 +373,7 @@ func GetAnnualReport(db *sql.DB) gin.HandlerFunc {
 		// get userid jwt
 		userID, _ := c.MustGet("user_id").(float64)
 
-		query := `
+		queryMonthly := `
 			SELECT
 				cast(EXTRACT(MONTH FROM date) as int) AS month,
 				cast(SUM(CASE WHEN type = 'inflow' THEN amount ELSE 0 END) as int) AS inflow,
@@ -389,7 +389,37 @@ func GetAnnualReport(db *sql.DB) gin.HandlerFunc {
 			ORDER BY month
 		`
 
-		rows, err := db.Query(query, userID)
+		rows, err := db.Query(queryMonthly, userID)
+		if err != nil {
+			utils.RespondError(c, http.StatusInternalServerError, "Failed to fetch data!", err.Error())
+			return
+		}
+		defer rows.Close()
+
+		var resultMontly []AnnualReport
+		for rows.Next() {
+			var annualReportData AnnualReport
+			err := rows.Scan(&annualReportData.Month, &annualReportData.Inflow, &annualReportData.Outflow, &annualReportData.Saving)
+			if err != nil {
+				utils.RespondError(c, http.StatusInternalServerError, "Failed to parse data!", err.Error())
+				return
+			}
+			resultMontly = append(resultMontly, annualReportData)
+		}
+		log.Print(resultMontly)
+
+		queryAnnual := `
+			SELECT
+				SUM(CASE WHEN type = 'outflow' THEN amount ELSE 0 END) AS outflow,
+				SUM(CASE WHEN type = 'inflow' THEN amount ELSE 0 END) AS inflow,
+				SUM(CASE WHEN type = 'inflow' THEN amount ELSE 0 END) - 
+				SUM(CASE WHEN type = 'outflow' THEN amount ELSE 0 END) AS saving
+			FROM swordfish.transactions AS tx
+			WHERE tx.user_id = $1 
+			AND tx.is_active = TRUE 
+			AND tx.date BETWEEN '2024-01-01' AND '2024-12-31';
+		`
+		rowsAnnual, err := db.Query(queryAnnual, userID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  http.StatusInternalServerError,
@@ -398,12 +428,12 @@ func GetAnnualReport(db *sql.DB) gin.HandlerFunc {
 			})
 			return
 		}
-		defer rows.Close()
+		defer rowsAnnual.Close()
 
-		var result []AnnualReport
-		for rows.Next() {
+		var resultAnnual []AnnualReport
+		for rowsAnnual.Next() {
 			var annualReportData AnnualReport
-			err := rows.Scan(&annualReportData.Month, &annualReportData.Inflow, &annualReportData.Outflow, &annualReportData.Saving)
+			err := rowsAnnual.Scan(&annualReportData.Inflow, &annualReportData.Outflow, &annualReportData.Saving)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{
 					"status":  http.StatusInternalServerError,
@@ -412,15 +442,18 @@ func GetAnnualReport(db *sql.DB) gin.HandlerFunc {
 				})
 				return
 			}
-			result = append(result, annualReportData)
+			resultAnnual = append(resultAnnual, annualReportData)
 		}
-		log.Print(result)
+		log.Print(resultAnnual)
 
 		// success response
 		c.JSON(http.StatusOK, gin.H{
 			"status":  http.StatusOK,
 			"message": "Success",
-			"data":    result,
+			"data": gin.H{
+				"monthly": resultMontly,
+				"total":   resultAnnual,
+			},
 		})
 	}
 }
