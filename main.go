@@ -4,7 +4,10 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"os"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/halosatrio/xwing/db"
 	"github.com/halosatrio/xwing/routes"
@@ -31,7 +34,28 @@ func main() {
 
 // setup app, define routes
 func setupRouter(db *sql.DB) *gin.Engine {
+	clientURL := os.Getenv("CLIENT_URL")
+
 	r := gin.Default()
+
+	// Custom CORS configuration
+	corsConfig := cors.Config{
+		// List allowed origins
+		AllowOrigins: []string{"http://localhost:3000", clientURL},
+		// Allow specific methods
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
+		// Allow specific headers
+		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
+		// Expose headers to the browser
+		ExposeHeaders: []string{"X-Custom-Header"},
+		// Allow cookies to be sent with the request
+		AllowCredentials: true,
+		// Cache the preflight response for 12 hours
+		MaxAge: 12 * time.Hour,
+	}
+
+	// Apply the custom CORS configuration
+	r.Use(cors.New(corsConfig))
 
 	// AS BASEPATH
 	v1 := r.Group("/v1")
