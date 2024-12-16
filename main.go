@@ -36,6 +36,14 @@ func setupRouter(db *sql.DB) *gin.Engine {
 	// AS BASEPATH
 	v1 := r.Group("/v1")
 	{
+    // health check
+		v1.GET("/test", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{
+				"status":  http.StatusOK,
+				"message": "Welcome to Xwing!",
+			})
+		})
+
 		// Register Routes
 		v1.POST("/auth/register", routes.RegisterRoute(db))
 		v1.POST("/auth/login", routes.LoginUser(db))
@@ -60,15 +68,6 @@ func setupRouter(db *sql.DB) *gin.Engine {
 		// Asset Routes
 		v1.Use(utils.JWTAuth()).GET("/asset", routes.GetAsset(db))
 		v1.Use(utils.JWTAuth()).POST("/asset/create", routes.PostCreateAsset(db))
-
-		// health check
-		v1.GET("/test", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"status":  http.StatusOK,
-				"message": "Welcome to Xwing!",
-			})
-		})
 	}
-
 	return r
 }
