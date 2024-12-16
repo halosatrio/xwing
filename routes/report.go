@@ -354,6 +354,11 @@ type AnnualReport struct {
 	Outflow int `json:"outflow"`
 	Saving  int `json:"saving"`
 }
+type AnnualCasflow struct {
+	TotalInflow  int `json:"total_inflow"`
+	TotalOutflow int `json:"total_outflow"`
+	TotalSaving  int `json:"total_saving"`
+}
 
 func GetAnnualCashflow(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -412,16 +417,33 @@ func GetAnnualCashflow(db *sql.DB) gin.HandlerFunc {
         CAST(SUM(CASE WHEN type = 'inflow' THEN amount else 0 END) as int) AS total_inflow,
         CAST(SUM(CASE WHEN type = 'outflow' THEN amount else 0 END) as int) AS total_outflow,
         CAST(SUM(CASE WHEN type = 'inflow' THEN amount else 0 END) - SUM(CASE WHEN type = 'outflow' THEN amount else 0 END) as int) AS total_saving
-      swordfish.transactions AS tx
+      FROM 
+        swordfish.transactions AS tx
 			WHERE
 				tx.user_id = $1 AND
 				tx.is_active = true
 				AND tx.date BETWEEN '2024-01-01' AND '2024-12-31'
     `
 
+		var resultAnnual AnnualCasflow
+		err = db.QueryRow(queryAnnual, userID).
+			Scan(
+				&resultAnnual.TotalInflow,
+				&resultAnnual.TotalOutflow,
+				&resultAnnual.TotalSaving,
+			)
+		if err != nil {
+			utils.RespondError(c, http.StatusInternalServerError, "Failed: Database error", err.Error())
+			return
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"status":  200,
 			"message": "Success!",
+			"data": gin.H{
+				"monthly": resultMontly,
+				"total":   resultAnnual,
+			},
 		})
 	}
 }
