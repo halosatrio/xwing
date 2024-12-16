@@ -79,14 +79,14 @@ func PostCreateAsset(db *sql.DB) gin.HandlerFunc {
 		// get userid jwt
 		userID, _ := c.MustGet("user_id").(float64)
 		query := `
-			INSERT INTO swordfish.asset (user_id, account, amount, date, notes, created_at, updated_at)
+			INSERT INTO swordfish.assets (user_id, account, amount, date, notes, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7)
-			RETURNING id, user_id, account, amount, date, notes, created_at
+			RETURNING id, user_id, account, amount, date, notes, created_at, updated_at
 		`
 
 		var newAsset models.AssetSchema
 		err := db.QueryRow(query, userID, assetReq.Account, assetReq.Amount, assetReq.Date, assetReq.Notes, time.Now(), time.Now()).
-			Scan(&newAsset.ID, &newAsset.UserId, &newAsset.Account, &newAsset.Amount, &newAsset.Date, &newAsset.Notes, &newAsset.CreatedAt)
+			Scan(&newAsset.ID, &newAsset.UserId, &newAsset.Account, &newAsset.Amount, &newAsset.Date, &newAsset.Notes, &newAsset.CreatedAt, &newAsset.UpdatedAt)
 		if err != nil {
 			utils.RespondError(c, http.StatusInternalServerError, "Failed to insert asset into database!", err.Error())
 			return
