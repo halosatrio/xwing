@@ -389,19 +389,24 @@ func GetAnnualCashflow(db *sql.DB) gin.HandlerFunc {
 			WHERE
 				tx.user_id = $1 AND
 				tx.is_active = true
-				AND tx.date BETWEEN '2024-01-01' AND '2024-12-31'
+				AND tx.date BETWEEN $2 AND $3
 			GROUP BY month
 			ORDER BY month
     `
 
-		rows, err := db.Query(queryMonthly, userID)
+		// Use year from query to define the range
+		startDate := fmt.Sprintf("%s-01-01", queryReq.Year)
+		endDate := fmt.Sprintf("%s-12-31", queryReq.Year)
+
+		rows, err := db.Query(queryMonthly, userID, startDate, endDate)
 		if err != nil {
 			utils.RespondError(c, http.StatusInternalServerError, "Failed to fetch data!", err.Error())
 			return
 		}
 		defer rows.Close()
 
-		var resultMontly []AnnualReport
+		// Map for storing results by month
+		monthlyMap := make(map[int]AnnualReport)
 		for rows.Next() {
 			var annualReportData AnnualReport
 			err := rows.Scan(&annualReportData.Month, &annualReportData.Inflow, &annualReportData.Outflow, &annualReportData.Saving)
@@ -409,7 +414,23 @@ func GetAnnualCashflow(db *sql.DB) gin.HandlerFunc {
 				utils.RespondError(c, http.StatusInternalServerError, "Failed to parse data!", err.Error())
 				return
 			}
-			resultMontly = append(resultMontly, annualReportData)
+			monthlyMap[annualReportData.Month] = annualReportData
+		}
+
+		// Generate default data for all 12 months
+		var resultMonthly []AnnualReport
+		for month := 1; month <= 12; month++ {
+			if report, exists := monthlyMap[month]; exists {
+				resultMonthly = append(resultMonthly, report)
+			} else {
+				// Default values for months without records
+				resultMonthly = append(resultMonthly, AnnualReport{
+					Month:   month,
+					Inflow:  0,
+					Outflow: 0,
+					Saving:  0,
+				})
+			}
 		}
 
 		queryAnnual := `
@@ -422,11 +443,11 @@ func GetAnnualCashflow(db *sql.DB) gin.HandlerFunc {
 			WHERE
 				tx.user_id = $1 AND
 				tx.is_active = true
-				AND tx.date BETWEEN '2024-01-01' AND '2024-12-31'
+				AND tx.date BETWEEN $2 AND $3
     `
 
 		var resultAnnual AnnualCasflow
-		err = db.QueryRow(queryAnnual, userID).
+		err = db.QueryRow(queryAnnual, userID, startDate, endDate).
 			Scan(
 				&resultAnnual.TotalInflow,
 				&resultAnnual.TotalOutflow,
@@ -441,7 +462,7 @@ func GetAnnualCashflow(db *sql.DB) gin.HandlerFunc {
 			"status":  200,
 			"message": "Success!",
 			"data": gin.H{
-				"monthly": resultMontly,
+				"monthly": resultMonthly,
 				"total":   resultAnnual,
 			},
 		})
