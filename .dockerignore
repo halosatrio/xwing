@@ -1,14 +1,24 @@
-# source: https://github.com/GoogleCloudPlatform/golang-samples/blob/main/run/helloworld/.dockerignore
+# Ignore the build artifacts
+main
+*.exe
+*.out
 
-# The .dockerignore file excludes files from the container build process.
-# https://docs.docker.com/engine/reference/builder/#dockerignore-file
-
-# Exclude locally vendored dependencies.
+# Ignore dependencies directory if using vendoring
 vendor/
 
-# Exclude "build-time" ignore files.
-.dockerignore
-.gcloudignore
+# Ignore Go files that are not needed in production
+*.log
+*.tmp
 
-# Exclude git history and configuration.
-.gitignore
+# Ignore the .git directory
+.git/
+
+# Ignore any test files
+*_test.go
+
+# Ignore IDE/Editor folders
+.idea/
+.vscode/
+
+# Ignore Dockerfile if you don't want to include it (usually you would include it)
+Dockerfile

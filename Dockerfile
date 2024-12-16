@@ -1,15 +1,26 @@
-# source: https://github.com/sikozonpc/GopherSocial
+FROM golang:1.22.1-alpine AS build
 
-# The build stage
-FROM golang:1.22 as builder
-WORKDIR /app
+RUN apk add --no-cache git
+
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o api main.go
 
-# The run stage
-FROM scratch
+RUN go build -o main .
+
+WORKDIR /dist
+
+RUN cp /build/main .
+RUN cp /build/.env .
+
+FROM scratch AS runtime
+
 WORKDIR /app
 
-COPY --from=builder /app/api .
-EXPOSE 8080
-CMD ["./api"]
+COPY --from=build /dist/main .
+COPY --from=build /build/.env .
+
+CMD [ "./main" ]
