@@ -13,7 +13,7 @@ func ErrorResponseUnauthorizedJwt(c *gin.Context, message string) {
 	c.JSON(http.StatusUnauthorized, gin.H{
 		"status":  http.StatusUnauthorized,
 		"message": "Failed",
-		"error":   "[middleware][jwt] " + message,
+		"error":   message,
 	})
 }
 

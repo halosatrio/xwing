@@ -17,7 +17,7 @@ func GetAsset(db *sql.DB) gin.HandlerFunc {
 		userID, _ := c.MustGet("user_id").(float64)
 
 		query := `
-			SELECT id, user_id, account, amount, date, notes, created_at, updated_at
+			SELECT id, user_id, account, amount, date, COALESCE(notes, '') as notes, created_at, updated_at
 			FROM swordfish.assets
 			WHERE user_id = $1
 			LIMIT 200
