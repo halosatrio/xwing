@@ -58,6 +58,7 @@ func setupRouter(db *sql.DB) *gin.Engine {
 		// GET Annual Cashflow
 
 		// Asset Routes
+		v1.Use(utils.JWTAuth()).GET("/asset", routes.GetAsset(db))
 		// GET Assets
 		// POST create asset
 
