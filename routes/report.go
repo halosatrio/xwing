@@ -355,6 +355,78 @@ type AnnualReport struct {
 	Saving  int `json:"saving"`
 }
 
+func GetAnnualCashflow(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var queryReq AnnualQueryReq
+
+		// Bind query parameters
+		if err := c.BindQuery(&queryReq); err != nil {
+			utils.RespondError(c, http.StatusBadRequest, "Invalid query parameters!", err.Error())
+			return
+		}
+
+		if _, err := strconv.Atoi(queryReq.Year); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"status": 400, "message": "Year must be a number"})
+			return
+		}
+
+		// get userid jwt
+		userID, _ := c.MustGet("user_id").(float64)
+
+		queryMonthly := `
+      SELECT
+				cast(EXTRACT(MONTH FROM date) as int) AS month,
+				cast(SUM(CASE WHEN type = 'inflow' THEN amount ELSE 0 END) as int) AS inflow,
+				cast(SUM(CASE WHEN type = 'outflow' THEN amount ELSE 0 END) as int) AS outflow,
+				cast(SUM(CASE WHEN type = 'inflow' THEN amount ELSE 0 END) - SUM(CASE WHEN type = 'outflow' THEN amount ELSE 0 END) as int) AS saving
+			FROM
+				swordfish.transactions AS tx
+			WHERE
+				tx.user_id = $1 AND
+				tx.is_active = true
+				AND tx.date BETWEEN '2024-01-01' AND '2024-12-31'
+			GROUP BY month
+			ORDER BY month
+    `
+
+		rows, err := db.Query(queryMonthly, userID)
+		if err != nil {
+			utils.RespondError(c, http.StatusInternalServerError, "Failed to fetch data!", err.Error())
+			return
+		}
+		defer rows.Close()
+
+		var resultMontly []AnnualReport
+		for rows.Next() {
+			var annualReportData AnnualReport
+			err := rows.Scan(&annualReportData.Month, &annualReportData.Inflow, &annualReportData.Outflow, &annualReportData.Saving)
+			if err != nil {
+				utils.RespondError(c, http.StatusInternalServerError, "Failed to parse data!", err.Error())
+				return
+			}
+			resultMontly = append(resultMontly, annualReportData)
+		}
+
+		queryAnnual := `
+      SELECT
+        CAST(SUM(CASE WHEN type = 'inflow' THEN amount else 0 END) as int) AS total_inflow,
+        CAST(SUM(CASE WHEN type = 'outflow' THEN amount else 0 END) as int) AS total_outflow,
+        CAST(SUM(CASE WHEN type = 'inflow' THEN amount else 0 END) - SUM(CASE WHEN type = 'outflow' THEN amount else 0 END) as int) AS total_saving
+      swordfish.transactions AS tx
+			WHERE
+				tx.user_id = $1 AND
+				tx.is_active = true
+				AND tx.date BETWEEN '2024-01-01' AND '2024-12-31'
+    `
+
+		c.JSON(http.StatusOK, gin.H{
+			"status":  200,
+			"message": "Success!",
+		})
+	}
+}
+
+// WIP, this is for all months per caetgory (GET Annual
 func GetAnnualReport(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var queryReq AnnualQueryReq
