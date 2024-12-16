@@ -59,7 +59,7 @@ func setupRouter(db *sql.DB) *gin.Engine {
 
 		// Asset Routes
 		v1.Use(utils.JWTAuth()).GET("/asset", routes.GetAsset(db))
-		// GET Assets
+		v1.Use(utils.JWTAuth()).POST("/asset/create", routes.PostCreateAsset(db))
 		// POST create asset
 
 		// health check
