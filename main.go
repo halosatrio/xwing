@@ -55,12 +55,11 @@ func setupRouter(db *sql.DB) *gin.Engine {
 		v1.Use(utils.JWTAuth()).GET("/report/quarter/shopping", routes.GetQuarterShopping(db))
 		v1.Use(utils.JWTAuth()).GET("/report/annual/cashflow", routes.GetAnnualCashflow(db))
 		// GET Annual (WIP, this is for all months per caetgory)
-		v1.Use(utils.JWTAuth()).GET("/report/annual", routes.GetAnnualReport(db))
+		// v1.Use(utils.JWTAuth()).GET("/report/annual", routes.GetAnnualReport(db))
 
 		// Asset Routes
 		v1.Use(utils.JWTAuth()).GET("/asset", routes.GetAsset(db))
 		v1.Use(utils.JWTAuth()).POST("/asset/create", routes.PostCreateAsset(db))
-		// POST create asset
 
 		// health check
 		v1.GET("/test", func(c *gin.Context) {

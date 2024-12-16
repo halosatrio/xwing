@@ -490,18 +490,15 @@ func GetAnnualReport(db *sql.DB) gin.HandlerFunc {
 
 		queryMonthly := `
 			SELECT
-				cast(EXTRACT(MONTH FROM date) as int) AS month,
-				cast(SUM(CASE WHEN type = 'inflow' THEN amount ELSE 0 END) as int) AS inflow,
-				cast(SUM(CASE WHEN type = 'outflow' THEN amount ELSE 0 END) as int) AS outflow,
-				cast(SUM(CASE WHEN type = 'inflow' THEN amount ELSE 0 END) - SUM(CASE WHEN type = 'outflow' THEN amount ELSE 0 END) as int) AS saving
+				category,
+        CAST(SUM(amount) AS int) AS amount
 			FROM
 				swordfish.transactions AS tx
 			WHERE
 				tx.user_id = $1 AND
 				tx.is_active = true
 				AND tx.date BETWEEN '2024-01-01' AND '2024-12-31'
-			GROUP BY month
-			ORDER BY month
+			GROUP BY category
 		`
 
 		rows, err := db.Query(queryMonthly, userID)
