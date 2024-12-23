@@ -41,7 +41,7 @@ func setupRouter(db *sql.DB) *gin.Engine {
 	// Custom CORS configuration
 	corsConfig := cors.Config{
 		// List allowed origins
-		AllowOrigins: []string{"http://localhost:3000", clientURL},
+		AllowOrigins: []string{"http://localhost:3000", clientURL, "http://localhost:8080"},
 		// Allow specific methods
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		// Allow specific headers
