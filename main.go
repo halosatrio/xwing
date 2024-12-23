@@ -44,8 +44,6 @@ func setupRouter(db *sql.DB) *gin.Engine {
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		// Allow specific headers
 		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
-		// Expose headers to the browser
-		ExposeHeaders: []string{"X-Custom-Header"},
 		// Cache the preflight response for 12 hours
 		MaxAge: 12 * time.Hour,
 	}
