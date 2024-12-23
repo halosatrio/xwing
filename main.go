@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -34,22 +33,19 @@ func main() {
 
 // setup app, define routes
 func setupRouter(db *sql.DB) *gin.Engine {
-	clientURL := os.Getenv("CLIENT_URL")
 
 	r := gin.Default()
 
 	// Custom CORS configuration
 	corsConfig := cors.Config{
 		// List allowed origins
-		AllowOrigins: []string{"http://localhost:3000", clientURL, "http://localhost:8080"},
+		AllowOrigins: []string{"http://localhost:3000", "http://localhost:5173", "http://localhost:8080", "https://dinero.bayubit.com"},
 		// Allow specific methods
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE"},
 		// Allow specific headers
 		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
 		// Expose headers to the browser
 		ExposeHeaders: []string{"X-Custom-Header"},
-		// Allow cookies to be sent with the request
-		AllowCredentials: true,
 		// Cache the preflight response for 12 hours
 		MaxAge: 12 * time.Hour,
 	}
